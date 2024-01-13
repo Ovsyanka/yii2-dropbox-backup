@@ -123,7 +123,18 @@ class BackupController extends Controller
         // Read backup file
         $f = fopen($backupFile, 'rb');
         // Upload to dropbox
-        $client->upload($this->getFilePathWithDir($dropboxFile), $f);
+        try {
+            $client->upload($this->getFilePathWithDir($dropboxFile), $f);
+        } catch (\Spatie\Dropbox\Exceptions\BadRequest $th) {
+
+            // Add response body to the message because in some cases there is plain text instead of JSON and it is not
+            // parsed correctly and the Exception message is null in the result.
+
+            $responseBody = $th->response->getBody()->__toString();
+            $message = "Dropbox server returned BadRequest error. Dropbox response body: \n{$responseBody}\n";
+
+            throw new \RuntimeException($message, 0, $th);
+        }
         // Close backup file
         @fclose($f);
 
