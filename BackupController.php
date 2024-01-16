@@ -6,7 +6,7 @@
  * @author    Ivan Orlov <gnasimed@gmail.com>
  */
 
-namespace demi\backup\dropbox;
+ namespace demi\backup\dropbox;
 
 use Yii;
 use yii\helpers\Console;
@@ -28,6 +28,13 @@ class BackupController extends Controller
      * @var string
      */
     public $backupComponent = 'backup';
+    /**
+     * Name of \Spatie\Dropbox\TokenProvider in Yii components.
+     * Default Yii::$app->dropboxTokenProvider
+     *
+     * @var string
+     */
+    public $tokenProviderComponentName = 'dropboxTokenProvider';
     /**
      * Dropbox app identifier. https://www.dropbox.com/developers/apps
      *
@@ -100,8 +107,16 @@ class BackupController extends Controller
      */
     public function init()
     {
-        if ($this->dropboxAccessToken === null && ($this->dropboxAppKey === null || $this->dropboxAppSecret === null)) {
-            throw new InvalidConfigException('You must set "' . get_class($this) . '::$dropboxAccessToken" OR ($dropboxAppKey AND $dropboxAppSecret)');
+        if (
+            $this->tokenProviderComponentName === null
+            && $this->dropboxAccessToken === null
+            && ($this->dropboxAppKey === null || $this->dropboxAppSecret === null)
+        ) {
+            throw new InvalidConfigException(
+                'You must set "'
+                . get_class($this)
+                . '::$dropboxAccessToken" OR ($dropboxAppKey AND $dropboxAppSecret) OR $tokenProviderComponentName'
+            );
         }
 
         parent::init();
@@ -190,11 +205,15 @@ class BackupController extends Controller
             return $this->_client;
         }
 
-        /** @noinspection ProperNullCoalescingOperatorUsageInspection As client contructor argument */
-        $access = $this->dropboxAccessToken ?? [$this->dropboxAppKey, $this->dropboxAppSecret];
+        if ($this->tokenProviderComponentName !== null) {
+            $access = $this->getTokenProvider();
+        } else {
+            /** @noinspection ProperNullCoalescingOperatorUsageInspection As client contructor argument */
+            $access = $this->dropboxAccessToken ?? [$this->dropboxAppKey, $this->dropboxAppSecret];
+        }
 
         return $this->_client = new Client(
-            $access, // 'accessToken' or ['appKey', 'appSecret']
+            $access,
             $this->guzzleClient,
             $this->maxChunkSize,
             $this->maxUploadChunkRetries
@@ -221,6 +240,17 @@ class BackupController extends Controller
     {
         /** @noinspection PhpIncompatibleReturnTypeInspection Yii always return correct class or trows Exception */
         return Yii::$app->get($this->backupComponent);
+    }
+
+    /**
+     * Get TokenProvider
+     *
+     * @return \Spatie\Dropbox\TokenProvider
+     * @throws \yii\base\InvalidConfigException
+     */
+    public function getTokenProvider()
+    {
+        return Yii::$app->get($this->tokenProviderComponentName);
     }
 
     /**
